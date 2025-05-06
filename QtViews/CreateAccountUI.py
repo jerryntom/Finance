@@ -1,3 +1,4 @@
+import os
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
     QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
@@ -8,6 +9,11 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QLineEdit)
+import re
+import mysql.connector as mysql
+import hashlib
+import string
+import random
 
 # Size contants for layout
 initWidth = 800
@@ -20,6 +26,8 @@ formWidgetsFrameMinimumWidth = 250
 formWidgetsFrameMaximumWidth = 400
 buttonMinimumHeight = 50
 
+# Validation constants
+passwordMinimumLength = 8   
 
 class CreateAccountView(QWidget):
     def setUpUI(self):
@@ -86,6 +94,14 @@ class CreateAccountView(QWidget):
         self.errorLabel.setObjectName("errorLabel")
         self.errorLabel.setAlignment(Qt.AlignCenter)
         self.errorLabel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.errorLabel.setStyleSheet("color: red;")
+        
+        # Success message label
+        self.successLabel = QLabel()
+        self.successLabel.setObjectName("successLabel")
+        self.successLabel.setAlignment(Qt.AlignCenter)
+        self.successLabel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.successLabel.setStyleSheet("color: green;")
         
         # Setting up layout for the main view form
         self.formLayout.addItem(self.verticalSpacerExpanding)
@@ -102,6 +118,8 @@ class CreateAccountView(QWidget):
         self.formLayout.addWidget(self.goBackButton)
         self.formLayout.addItem(self.verticalSpacerFixed)
         self.formLayout.addWidget(self.errorLabel)
+        self.formLayout.addItem(self.verticalSpacerFixed)
+        self.formLayout.addWidget(self.successLabel)
         self.formLayout.addItem(self.verticalSpacerFixed)
         
         # Setting up horizontal layout for the main view window
@@ -121,3 +139,97 @@ class CreateAccountView(QWidget):
         self.createAccountButton.setText(QCoreApplication.translate("logInView", "Create an account", None))
         self.goBackButton.setText(QCoreApplication.translate("logInView", "Go Back", None))
         self.titleLabel.setText(QCoreApplication.translate("logInView", "Create an account", None))
+      
+    def isEmailValid(self):
+        self.email = self.emailField.text()
+        if self.email == '':
+            self.setError("E-mail cannot be empty")
+        elif not re.match(r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)", self.emailField.text()):
+            self.setError("Invalid e-mail address")
+        elif self.email != '':
+            self.connectToMysql()
+            self.cursor.execute('use finedu')
+            emailCheckQuery = ('select 1 from users where email = %s')
+            self.cursor.execute(emailCheckQuery, (self.email,))
+            emailCheckResult = self.cursor.fetchone()
+            print(emailCheckResult)
+
+            if emailCheckResult is not None:
+                self.setError("E-mail already exists!")
+            else:        
+                self.errorLabel.setText("")
+                self.successLabel.setText('')
+
+            self.db.close()
+        
+    def isPasswordValid(self):
+        password = self.passwordField.text()
+        repeatedPassword = self.repeatPasswordField.text()
+        if password == '':
+            self.setError("Password cannot be empty")
+        elif len(password) < passwordMinimumLength:
+            self.setError(f"Password must be at least {passwordMinimumLength} characters long")
+        elif not re.match(r"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z])(?=.*[#?!@$%^&*-]).{8,}$", self.passwordField.text()):
+            self.setError("Password must contain at least 1 big letter,\n1 number and 1 special character")
+        elif repeatedPassword == '':
+            self.setError("Please repeat your password")
+        elif password != repeatedPassword:
+            self.setError("Passwords are not the same")
+        else:
+            self.errorLabel.setText('')   
+            self.successLabel.setText('')
+        
+    def createAccount(self):
+        self.isEmailValid()
+
+        if self.errorLabel.text() == "":
+            self.isPasswordValid()
+        
+        # No error messages, proceed to create account
+        if self.errorLabel.text() == "":
+            self.generateHashedPassword()
+            self.connectToMysql()
+            self.cursor.execute('use finedu')
+            userInsertQuery = ('insert into users (email, pass, salt) values (%s, %s, %s)')
+            userData = (self.email, self.hashedPassword, self.salt,)
+            self.cursor.execute(userInsertQuery, userData)
+            self.db.commit()
+            self.db.close()
+            self.clearView()
+            self.successLabel.setText("Account created successfully!")
+            
+    def generateHashedPassword(self):
+        self.salt = [random.choice(string.printable) for _ in range(16)]
+        self.salt = ''.join(self.salt).encode('utf-8')
+        password = self.passwordField.text().encode('utf-8')
+        self.hashedPassword = hashlib.sha256(password + self.salt).hexdigest()
+        
+    def clearView(self):
+        self.emailField.setText('')
+        self.passwordField.setText('')
+        self.repeatPasswordField.setText('')
+        self.errorLabel.setText('')
+        self.successLabel.setText('')
+        self.email = ''
+        self.salt = ''
+        self.hashedPassword = ''
+    
+    def setError(self, errorMessage):
+        self.errorLabel.setText(errorMessage)
+        self.successLabel.setText('')
+        
+    def setSuccess(self, successMessage):
+        self.successLabel.setText(successMessage)
+        self.errorLabel.setText('')
+    
+    def connectToMysql(self):
+        try:
+            self.db = mysql.connect(
+                host="localhost",
+                user="root",
+                password="",
+            )
+            print("Connected to MySQL")
+            self.cursor = self.db.cursor()
+        except mysql.Error as err:
+            print("Failed to connect to MySQL:", err)

@@ -44,17 +44,18 @@ class MainWindow():
         # Set up main view
         self.mainView = MainView()
         self.mainView.setUpUI()
-        self.mainView.logInButton.clicked.connect(lambda: self.navigation.setCurrentWidget(self.logInView))
-        self.mainView.registerButton.clicked.connect(lambda: self.navigation.setCurrentWidget(self.createAccountView))
+        self.mainView.logInButton.clicked.connect(lambda: self.showLoginView())
+        self.mainView.registerButton.clicked.connect(lambda: self.showCreateAccountView())
         
         # Set up log in view
         self.logInView = LogInView()
         self.logInView.setUpUI()
-        self.logInView.goBackButton.clicked.connect(lambda: self.navigation.setCurrentWidget(self.mainView))
+        self.logInView.goBackButton.clicked.connect(lambda: self.showMainView())
         
         # Set up create account view
         self.createAccountView = CreateAccountView()
         self.createAccountView.setUpUI()
+        self.createAccountView.createAccountButton.clicked.connect(lambda: self.createAccountView.createAccount())
         self.createAccountView.goBackButton.clicked.connect(lambda: self.navigation.setCurrentWidget(self.mainView))
 
         # Add views to navigation
@@ -65,7 +66,16 @@ class MainWindow():
         
         mainWindow.setWindowTitle("FinEdu")
         QMetaObject.connectSlotsByName(mainWindow)
+        
+    def showMainView(self):
+        self.navigation.setCurrentWidget(self.mainView)
+        
+    def showCreateAccountView(self):
+        self.createAccountView.clearView()
+        self.navigation.setCurrentWidget(self.createAccountView)
 
+    def showLoginView(self):
+        self.navigation.setCurrentWidget(self.logInView)
 
 class MainWindowSetUp(QMainWindow):
     def __init__(self, parent=None):
