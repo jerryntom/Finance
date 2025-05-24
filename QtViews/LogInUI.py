@@ -195,12 +195,13 @@ class LogInView(QWidget):
         
         # No error messages, proceed to log in procedure
         if self.errorLabel.text() == "":
+            self.getUserId()
             self.clearView()
             self.setSuccess('Logged in successfully!')
-            return True
+            return self.user_id
         else:
             self.setError('Log in failed!')
-            return False
+            return None
             
     def clearView(self):
         self.emailField.setText('')
@@ -225,8 +226,25 @@ class LogInView(QWidget):
                 host="localhost",
                 user="root",
                 password="",
+                database="finedu"
             )
             print("Connected to MySQL")
             self.cursor = self.db.cursor()
         except mysql.Error as err:
             print("Failed to connect to MySQL:", err)
+            
+    def getUserId(self):
+        """Return the user_id for the currently logged-in user (by email)."""
+        email = self.emailField.text() if hasattr(self, 'emailField') else getattr(self, 'email', None)
+        if not email:
+            return None
+        try:
+            self.connectToMysql()
+            self.cursor.execute('SELECT user_id FROM users WHERE email = %s', (email,))
+            result = self.cursor.fetchone()
+            self.db.close()
+            if result:
+                self.user_id = result[0]
+        except Exception as e:
+            print(f"Error fetching user_id: {e}")
+        return None

@@ -76,9 +76,10 @@ class MainWindow():
         QMetaObject.connectSlotsByName(mainWindow)
     
     def handleLogin(self):
-        if self.logInView.logIn():
-            # Load user accounts (mock data for now)
-            self.loadUserDashboard()
+        self.user_id = self.logInView.logIn()
+        if self.user_id:
+            print(f"User ID: {self.user_id}")
+            self.dashboardView.setUserId(self.user_id)
             self.showDashboardView()
     
     def loadUserDashboard(self):
