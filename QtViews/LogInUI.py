@@ -8,6 +8,11 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QLineEdit)
+import re
+import mysql.connector as mysql
+import hashlib
+import string
+import random
 
 # Size contants for layout
 initWidth = 800
@@ -20,6 +25,12 @@ formWidgetsFrameMinimumWidth = 250
 formWidgetsFrameMaximumWidth = 400
 buttonMinimumHeight = 50
 
+# Validation constants
+passwordMinimumLength = 8   
+
+# DB columns numbers
+hashedPasswordColumn = 0
+saltColumn = 1
 
 class LogInView(QWidget):
     def setUpUI(self):
@@ -80,6 +91,14 @@ class LogInView(QWidget):
         self.errorLabel.setObjectName("errorLabel")
         self.errorLabel.setAlignment(Qt.AlignCenter)
         self.errorLabel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.errorLabel.setStyleSheet("color: red;")
+        
+        # Success message label
+        self.successLabel = QLabel()
+        self.successLabel.setObjectName("successLabel")
+        self.successLabel.setAlignment(Qt.AlignCenter)
+        self.successLabel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.successLabel.setStyleSheet("color: green;")
         
         # Setting up layout for the main view form
         self.formLayout.addItem(self.verticalSpacerExpanding)
@@ -94,6 +113,8 @@ class LogInView(QWidget):
         self.formLayout.addWidget(self.goBackButton)
         self.formLayout.addItem(self.verticalSpacerFixed)
         self.formLayout.addWidget(self.errorLabel)
+        self.formLayout.addItem(self.verticalSpacerFixed)
+        self.formLayout.addWidget(self.successLabel)
         self.formLayout.addItem(self.verticalSpacerFixed)
         
         # Setting up horizontal layout for the main view window
@@ -113,3 +134,99 @@ class LogInView(QWidget):
         self.logInButton.setText(QCoreApplication.translate("logInView", "Log in", None))
         self.goBackButton.setText(QCoreApplication.translate("logInView", "Go Back", None))
         self.titleLabel.setText(QCoreApplication.translate("logInView", "Log in to your account", None))
+        
+    def isEmailValid(self):
+        self.email = self.emailField.text()
+        if self.email == '':
+            self.setError("E-mail cannot be empty")
+        elif not re.match(r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)", self.emailField.text()):
+            self.setError("Invalid e-mail address")
+        elif self.email != '':
+            self.connectToMysql()
+            self.cursor.execute('use finedu')
+            emailCheckQuery = ('select 1 from users where email = %s')
+            self.cursor.execute(emailCheckQuery, (self.email,))
+            emailCheckResult = self.cursor.fetchone()
+            print(emailCheckResult)
+
+            if emailCheckResult is None:
+                self.setError("Invalid e-mail address")
+            else:        
+                self.setError("")
+                self.setSuccess("")
+                
+            self.db.close()
+        
+    def isPasswordValid(self):
+        password = self.passwordField.text()
+        
+        if password == '':
+            self.setError("Password cannot be empty")
+        else:
+            self.connectToMysql()
+            self.cursor.execute('use finedu')
+            accountCredentialsQuery = ('select pass, salt from users where email = %s')
+            self.cursor.execute(accountCredentialsQuery, (self.email,))
+            accountCredentials = self.cursor.fetchone()
+
+            password = password.encode('utf-8')
+            salt = accountCredentials[saltColumn].encode('utf-8')
+            password = password + salt
+            print(password)
+            passwordTest = hashlib.sha256(password).hexdigest()
+            hashedPassword = accountCredentials[hashedPasswordColumn]
+            
+            print(passwordTest, hashedPassword)
+            
+            if passwordTest != hashedPassword:
+                self.setError("Invalid password")
+            else:
+                self.setError("")
+                self.setSuccess("")
+
+            self.db.close()
+
+        
+    def logIn(self):
+        self.isEmailValid()
+
+        if self.errorLabel.text() == "":
+            self.isPasswordValid()
+        
+        # No error messages, proceed to log in procedure
+        if self.errorLabel.text() == "":
+            self.clearView()
+            self.setSuccess('Logged in successfully!')
+            return True
+        else:
+            self.setError('Log in failed!')
+            return False
+            
+    def clearView(self):
+        self.emailField.setText('')
+        self.passwordField.setText('')
+        self.errorLabel.setText('')
+        self.successLabel.setText('')
+        self.email = ''
+        self.salt = ''
+        self.hashedPassword = ''
+    
+    def setError(self, errorMessage):
+        self.errorLabel.setText(errorMessage)
+        self.successLabel.setText('')
+        
+    def setSuccess(self, successMessage):
+        self.successLabel.setText(successMessage)
+        self.errorLabel.setText('')
+        
+    def connectToMysql(self):
+        try:
+            self.db = mysql.connect(
+                host="localhost",
+                user="root",
+                password="",
+            )
+            print("Connected to MySQL")
+            self.cursor = self.db.cursor()
+        except mysql.Error as err:
+            print("Failed to connect to MySQL:", err)
