@@ -121,10 +121,13 @@ class DashboardView(QWidget):
         self.loadAccountsFromDB()
 
     def loadAccountsFromDB(self):
-        """Load accounts from MySQL for the current user."""
+        """Load accounts from SQLite for the current user and update total balance."""
         self.clearAccounts()
+        total_balance = 0.0
         if not self.user_id:
             self.updateEmptyState()
+            self.updateTotalBalance(0.0)
+            self.updateIncomeAndExpenses()
             return
         cursor = self.db.cursor()
         cursor.execute(
@@ -134,8 +137,11 @@ class DashboardView(QWidget):
         for acc_id, name, type_id, balance in cursor.fetchall():
             account_type = self.getAccountTypeName(type_id)
             self._addAccountWidget(acc_id, name, balance, account_type)
+            total_balance += float(balance)
         cursor.close()
         self.updateEmptyState()
+        self.updateTotalBalance(total_balance)
+        self.updateIncomeAndExpenses()
 
     def getAccountTypeName(self, type_id):
         # You can expand this mapping as needed
@@ -155,6 +161,7 @@ class DashboardView(QWidget):
         self.db.commit()
         cursor.close()
         self.loadAccountsFromDB()
+        self.updateIncomeAndExpenses()
 
     def getAccountTypeId(self, account_type):
         mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
@@ -173,11 +180,17 @@ class DashboardView(QWidget):
         font.setBold(True)
         accountBalanceLabel.setFont(font)
 
-        # Plus button with text "+"
-        plusButton = QPushButton("+")
-        plusButton.setFixedSize(30, 30)
-        plusButton.setToolTip("Add Transaction")
-        plusButton.clicked.connect(lambda: self.showAddTransactionDialog(acc_id))
+        # Add transaction button
+        addTransactionButton = QPushButton("Add Transaction")
+        addTransactionButton.setFixedSize(120, 30)
+        addTransactionButton.setToolTip("Add Transaction")
+        addTransactionButton.clicked.connect(lambda: self.showAddTransactionDialog(acc_id))
+
+        # View Transactions button
+        viewTransactionsButton = QPushButton("View Transactions")
+        viewTransactionsButton.setFixedSize(120, 30)
+        viewTransactionsButton.setToolTip("View Transactions for this Account")
+        viewTransactionsButton.clicked.connect(lambda: self.parent().showTransactionView(acc_id, name) if self.parent() and hasattr(self.parent(), 'showTransactionView') else None)
 
         # Remove button with trash icon
         removeButton = QPushButton()
@@ -190,7 +203,8 @@ class DashboardView(QWidget):
         accountLayout.addWidget(accountTypeLabel)
         accountLayout.addStretch()
         accountLayout.addWidget(accountBalanceLabel)
-        accountLayout.addWidget(plusButton)
+        accountLayout.addWidget(addTransactionButton)
+        accountLayout.addWidget(viewTransactionsButton)
         accountLayout.addWidget(removeButton)
 
         self.accountsLayout.addWidget(accountFrame)
@@ -199,6 +213,11 @@ class DashboardView(QWidget):
     def removeAccount(self, acc_id, accountFrame):
         """Remove account from DB and UI."""
         cursor = self.db.cursor()
+        # Remove transactions for this account
+        cursor.execute(
+            "DELETE FROM transactions WHERE finance_account_id = ?",
+            (acc_id,)
+        )
         cursor.execute(
             "DELETE FROM finance_accounts WHERE finance_account_id = ? AND user_id = ?",
             (acc_id, self.user_id)
@@ -210,13 +229,50 @@ class DashboardView(QWidget):
             self.accounts.remove(accountFrame)
         accountFrame.deleteLater()
         self.updateEmptyState()
+        self.loadAccountsFromDB()
+        self.updateIncomeAndExpenses()
 
+    def updateIncomeAndExpenses(self):
+        """Update the monthly income and expenses summary fields for the current month."""
+        if not self.user_id:
+            self.updateIncome(0.0)
+            self.updateExpenses(0.0)
+            return
+        import datetime
+        now = datetime.datetime.now()
+        month_start = now.replace(day=1).strftime('%Y-%m-%d')
+        month_end = (now.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
+        month_end = month_end.strftime('%Y-%m-%d')
+        cursor = self.db.cursor()
+        cursor.execute(
+            "SELECT transaction_amount FROM transactions t JOIN finance_accounts a ON t.finance_account_id = a.finance_account_id WHERE a.user_id = ? AND transaction_date >= ? AND transaction_date <= ?",
+            (self.user_id, month_start, month_end)
+        )
+        income = 0.0
+        expenses = 0.0
+        for (amount,) in cursor.fetchall():
+            if amount >= 0:
+                income += amount
+            else:
+                expenses += amount
+        cursor.close()
+        self.updateIncome(income)
+        self.updateExpenses(abs(expenses))
+
+    def updateIncome(self, value):
+        valueLabel = self.incomeFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")
+
+    def updateExpenses(self, value):
+        valueLabel = self.expensesFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")
+        
     def updateEmptyState(self):
         """Show or hide empty state message depending on accounts"""
         hasAccounts = len(self.accounts) > 0
         self.emptyStateFrame.setVisible(not hasAccounts)
         self.accountsScrollArea.setVisible(hasAccounts)
-        
+
     def createSummaryBox(self, title, value):
         frame = QFrame()
         layout = QVBoxLayout(frame)
@@ -261,12 +317,12 @@ class DashboardView(QWidget):
     def showAddTransactionDialog(self, acc_id):
         dialog = AddTransactionDialog(self)
         if dialog.exec():
-            name, amount = dialog.getData()
+            name, amount, date = dialog.getData()
             if name and amount is not None:
                 cursor = self.db.cursor()
                 cursor.execute(
-                    "INSERT INTO transactions (transaction_name, transaction_amount, finance_account_id) VALUES (?, ?, ?)",
-                    (name, float(amount), acc_id)
+                    "INSERT INTO transactions (transaction_name, transaction_amount, finance_account_id, transaction_date) VALUES (?, ?, ?, ?)",
+                    (name, float(amount), acc_id, date)
                 )
                 # Update the account balance
                 cursor.execute(
@@ -276,3 +332,10 @@ class DashboardView(QWidget):
                 self.db.commit()
                 cursor.close()
                 self.loadAccountsFromDB()
+                self.updateIncomeAndExpenses()
+
+    def updateTotalBalance(self, value):
+        """Update the total balance summary box value label."""
+        # Assumes the second widget in totalBalanceFrame is the value label
+        valueLabel = self.totalBalanceFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")
