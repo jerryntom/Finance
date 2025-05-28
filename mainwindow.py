@@ -8,6 +8,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QStackedWidget)
+import os
 import sys
 from QtViews.MainUI import MainView
 from QtViews.LogInUI import LogInView
@@ -24,6 +25,15 @@ verticalSpacerHeight = 10
 formWidgetsFrameMinimumWidth = 250
 formWidgetsFrameMaximumWidth = 400
 logInButtonMinimumHeight = 50
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 class MainWindow():
     def setupUi(self, mainWindow):
@@ -64,7 +74,7 @@ class MainWindow():
         self.dashboardView = DashboardView()
         self.dashboardView.setUpUI()
         self.dashboardView.logoutButton.clicked.connect(self.handleLogout)
-
+        
         # Add views to navigation
         self.navigation.addWidget(self.mainView)
         self.navigation.addWidget(self.logInView)
@@ -73,6 +83,7 @@ class MainWindow():
         self.navigation.setCurrentWidget(self.mainView)
         
         mainWindow.setWindowTitle("FinEdu")
+        mainWindow.setWindowIcon(QIcon(resource_path("icon.png")))
         QMetaObject.connectSlotsByName(mainWindow)
     
     def handleLogin(self):
@@ -98,6 +109,7 @@ class MainWindow():
     
     def showDashboardView(self):
         self.navigation.setCurrentWidget(self.dashboardView)
+
 
 class MainWindowSetUp(QMainWindow):
     def __init__(self, parent=None):

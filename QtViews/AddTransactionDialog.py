@@ -1,7 +1,7 @@
 import os
 import sys
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDoubleSpinBox)
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDoubleSpinBox, QDateEdit)
+from PySide6.QtCore import Qt, QDate
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -38,6 +38,14 @@ class AddTransactionDialog(QDialog):
         layout.addWidget(amountLabel)
         layout.addWidget(self.amountSpin)
 
+        # Transaction Date
+        dateLabel = QLabel("Date:")
+        self.dateEdit = QDateEdit()
+        self.dateEdit.setCalendarPopup(True)
+        self.dateEdit.setDate(QDate.currentDate())
+        layout.addWidget(dateLabel)
+        layout.addWidget(self.dateEdit)
+
         # Error Label
         self.errorLabel = QLabel()
         self.errorLabel.setStyleSheet("color: red;")
@@ -58,7 +66,8 @@ class AddTransactionDialog(QDialog):
     def getData(self):
         name = self.nameEdit.text().strip()
         amount = self.amountSpin.value()
-        return name, amount
+        date = self.dateEdit.date().toString("yyyy-MM-dd")
+        return name, amount, date
 
     def accept(self):
         name = self.nameEdit.text().strip()
