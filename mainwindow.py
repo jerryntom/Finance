@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
 import sys
 from QtViews.MainUI import MainView
 from QtViews.LogInUI import LogInView
-from QtViews.CreateAccountUI import CreateAccountView
+from QtViews.CreateUserAccountUI import CreateAccountView
 from QtViews.DashboardUI import DashboardView
 
 # Size contants for layout
@@ -81,16 +81,6 @@ class MainWindow():
             print(f"User ID: {self.user_id}")
             self.dashboardView.setUserId(self.user_id)
             self.showDashboardView()
-    
-    def loadUserDashboard(self):
-        # Clear existing accounts
-        self.dashboardView.clearAccounts()
-        
-        # Add mock accounts
-        self.dashboardView.addAccount("Checking Account", 2435.67, "Checking")
-        self.dashboardView.addAccount("Savings Account", 12750.42, "Savings")
-        self.dashboardView.addAccount("Investment Account", 45320.18, "Investment")
-        self.dashboardView.addAccount("Credit Card", -1250.30, "Credit")
     
     def handleLogout(self):
         self.showMainView()

@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QPushButton, QFrame, QScrollArea, QGridLayout,
                               QSpacerItem, QSizePolicy, QStyle)
 from PySide6.QtGui import QFont, QIcon
+from .AddAccountDialog import AddAccountDialog
 
 class DashboardView(QWidget):
     def __init__(self, user_id=None):
@@ -85,7 +86,7 @@ class DashboardView(QWidget):
         
         # Add account button
         self.addAccountButton = QPushButton("+ Add New Account")
-        self.addAccountButton.clicked.connect(lambda: self.addAccount("New Account", 0.00, "Checking"))
+        self.addAccountButton.clicked.connect(self.showAddAccountDialog)
         
         # Actions section
         self.actionsFrame = QFrame()
@@ -132,26 +133,25 @@ class DashboardView(QWidget):
 
     def getAccountTypeName(self, type_id):
         # You can expand this mapping as needed
-        mapping = {1: "Checking", 2: "Savings", 3: "Investment", 4: "Credit"}
+        mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
         return mapping.get(type_id, "Other")
 
-    def addAccount(self, name, balance, account_type):
+    def addFinanceAccount(self, name, balance, account_type_id):
         """Add account to DB and refresh view."""
         if not self.user_id:
             return
-        type_id = self.getAccountTypeId(account_type)
         cursor = self.db.cursor()
         cursor.execute(
             "INSERT INTO finance_accounts (finance_account_name, finance_account_type_id, finance_account_balance, user_id) "
             "VALUES (%s, %s, %s, %s)",
-            (name, type_id, int(balance), self.user_id)
+            (name, account_type_id, float(balance), self.user_id)  # Use float for decimal values
         )
         self.db.commit()
         cursor.close()
         self.loadAccountsFromDB()
 
     def getAccountTypeId(self, account_type):
-        mapping = {"Checking": 1, "Savings": 2, "Investment": 3, "Credit": 4}
+        mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
         return mapping.get(account_type, 1)
 
     def _addAccountWidget(self, acc_id, name, balance, account_type):
@@ -167,6 +167,12 @@ class DashboardView(QWidget):
         font.setBold(True)
         accountBalanceLabel.setFont(font)
 
+        # Plus button with text "+"
+        plusButton = QPushButton("+")
+        plusButton.setFixedSize(30, 30)
+        plusButton.setToolTip("Plus Action")
+        # plusButton.clicked.connect(lambda: self.handlePlusAction(acc_id))  # Placeholder for future action
+
         # Remove button with trash icon
         removeButton = QPushButton()
         removeButton.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
@@ -178,6 +184,7 @@ class DashboardView(QWidget):
         accountLayout.addWidget(accountTypeLabel)
         accountLayout.addStretch()
         accountLayout.addWidget(accountBalanceLabel)
+        accountLayout.addWidget(plusButton)
         accountLayout.addWidget(removeButton)
 
         self.accountsLayout.addWidget(accountFrame)
@@ -237,3 +244,11 @@ class DashboardView(QWidget):
         """Set the user_id and reload accounts from DB."""
         self.user_id = user_id
         self.loadAccountsFromDB()
+
+    def showAddAccountDialog(self):
+        dialog = AddAccountDialog(self)
+        if dialog.exec():
+            name, type_id, type_name, balance = dialog.getData()
+            print(f"Adding account: {name}, Type: {type_name}, Balance: {balance}")
+            if name:
+                self.addFinanceAccount(name, balance, type_id)
