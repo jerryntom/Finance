@@ -35,7 +35,7 @@ class AddAccountDialog(QDialog):
         # Initial Balance
         balanceLabel = QLabel("Initial Balance:")
         self.balanceSpin = QDoubleSpinBox()
-        self.balanceSpin.setRange(-100000000, 100000000)
+        self.balanceSpin.setRange(-999999999, 999999999)
         self.balanceSpin.setDecimals(2)
         self.balanceSpin.setValue(0.00)
         layout.addWidget(balanceLabel)
@@ -70,10 +70,6 @@ class AddAccountDialog(QDialog):
         if not name:
             self.nameEdit.setToolTip("Account name cannot be empty.")
             self.errorLabel.setText("Account name cannot be empty.")
-            return
-        elif len(name) > 50:
-            self.nameEdit.setToolTip("Account name must be at most 50 characters.")
-            self.errorLabel.setText("Account name must be at most 50 characters.")
             return
         else:
             self.nameEdit.setToolTip("")
