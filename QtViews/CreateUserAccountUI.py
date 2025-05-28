@@ -1,4 +1,5 @@
 import os
+import sys
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
     QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QLineEdit)
 import re
-import mysql.connector as mysql
+import sqlite3
 import hashlib
 import string
 import random
@@ -28,6 +29,15 @@ buttonMinimumHeight = 50
 
 # Validation constants
 passwordMinimumLength = 8   
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 class CreateAccountView(QWidget):
     def setUpUI(self):
@@ -148,18 +158,14 @@ class CreateAccountView(QWidget):
             self.setError("Invalid e-mail address")
         elif self.email != '':
             self.connectToMysql()
-            self.cursor.execute('use finedu')
-            emailCheckQuery = ('select 1 from users where email = %s')
+            emailCheckQuery = ('select 1 from users where email = ?')
             self.cursor.execute(emailCheckQuery, (self.email,))
             emailCheckResult = self.cursor.fetchone()
-            print(emailCheckResult)
-
             if emailCheckResult is not None:
                 self.setError("E-mail already exists!")
-            else:        
+            else:
                 self.errorLabel.setText("")
                 self.successLabel.setText('')
-
             self.db.close()
         
     def isPasswordValid(self):
@@ -181,17 +187,14 @@ class CreateAccountView(QWidget):
         
     def createAccount(self):
         self.isEmailValid()
-
         if self.errorLabel.text() == "":
             self.isPasswordValid()
-        
         # No error messages, proceed to create account
         if self.errorLabel.text() == "":
             self.generateHashedPassword()
             self.connectToMysql()
-            self.cursor.execute('use finedu')
-            userInsertQuery = ('insert into users (email, pass, salt) values (%s, %s, %s)')
-            userData = (self.email, self.hashedPassword, self.saltString,)  # Use string version
+            userInsertQuery = ('insert into users (email, pass, salt) values (?, ?, ?)')
+            userData = (self.email, self.hashedPassword, self.saltString,)
             self.cursor.execute(userInsertQuery, userData)
             self.db.commit()
             self.db.close()
@@ -204,7 +207,6 @@ class CreateAccountView(QWidget):
         saltEncoded = self.saltString.encode('utf-8')  # Encode for hashing
         password = self.passwordField.text().encode('utf-8')
         password = password + saltEncoded
-        print(password)
         self.hashedPassword = hashlib.sha256(password).hexdigest()
         
     def clearView(self):
@@ -228,12 +230,7 @@ class CreateAccountView(QWidget):
     
     def connectToMysql(self):
         try:
-            self.db = mysql.connect(
-                host="localhost",
-                user="root",
-                password="",
-            )
-            print("Connected to MySQL")
+            self.db = sqlite3.connect(resource_path('finedu.db'))
             self.cursor = self.db.cursor()
-        except mysql.Error as err:
-            print("Failed to connect to MySQL:", err)
+        except Exception as err:
+            print("Failed to connect to SQLite:", err)

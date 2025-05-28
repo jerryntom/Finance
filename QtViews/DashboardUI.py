@@ -1,20 +1,26 @@
-import mysql.connector
+import sqlite3
+import os
+import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QPushButton, QFrame, QScrollArea, QGridLayout,
                               QSpacerItem, QSizePolicy, QStyle)
 from PySide6.QtGui import QFont, QIcon
+from .AddAccountDialog import AddAccountDialog
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class DashboardView(QWidget):
     def __init__(self, user_id=None):
         super().__init__()
         self.user_id = user_id
-        self.db = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            database="finedu"
-        )
+        self.db = sqlite3.connect(resource_path("finedu.db"))
         self.accounts = []
         
     def setUpUI(self):
@@ -85,7 +91,7 @@ class DashboardView(QWidget):
         
         # Add account button
         self.addAccountButton = QPushButton("+ Add New Account")
-        self.addAccountButton.clicked.connect(lambda: self.addAccount("New Account", 0.00, "Checking"))
+        self.addAccountButton.clicked.connect(self.showAddAccountDialog)
         
         # Actions section
         self.actionsFrame = QFrame()
@@ -122,7 +128,7 @@ class DashboardView(QWidget):
         cursor = self.db.cursor()
         cursor.execute(
             "SELECT finance_account_id, finance_account_name, finance_account_type_id, finance_account_balance "
-            "FROM finance_accounts WHERE user_id = %s", (self.user_id,)
+            "FROM finance_accounts WHERE user_id = ?", (self.user_id,)
         )
         for acc_id, name, type_id, balance in cursor.fetchall():
             account_type = self.getAccountTypeName(type_id)
@@ -132,26 +138,25 @@ class DashboardView(QWidget):
 
     def getAccountTypeName(self, type_id):
         # You can expand this mapping as needed
-        mapping = {1: "Checking", 2: "Savings", 3: "Investment", 4: "Credit"}
+        mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
         return mapping.get(type_id, "Other")
 
-    def addAccount(self, name, balance, account_type):
+    def addFinanceAccount(self, name, balance, account_type_id):
         """Add account to DB and refresh view."""
         if not self.user_id:
             return
-        type_id = self.getAccountTypeId(account_type)
         cursor = self.db.cursor()
         cursor.execute(
             "INSERT INTO finance_accounts (finance_account_name, finance_account_type_id, finance_account_balance, user_id) "
-            "VALUES (%s, %s, %s, %s)",
-            (name, type_id, int(balance), self.user_id)
+            "VALUES (?, ?, ?, ?)",
+            (name, account_type_id, float(balance), self.user_id)  # Use float for decimal values
         )
         self.db.commit()
         cursor.close()
         self.loadAccountsFromDB()
 
     def getAccountTypeId(self, account_type):
-        mapping = {"Checking": 1, "Savings": 2, "Investment": 3, "Credit": 4}
+        mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
         return mapping.get(account_type, 1)
 
     def _addAccountWidget(self, acc_id, name, balance, account_type):
@@ -167,6 +172,12 @@ class DashboardView(QWidget):
         font.setBold(True)
         accountBalanceLabel.setFont(font)
 
+        # Plus button with text "+"
+        plusButton = QPushButton("+")
+        plusButton.setFixedSize(30, 30)
+        plusButton.setToolTip("Plus Action")
+        # plusButton.clicked.connect(lambda: self.handlePlusAction(acc_id))  # Placeholder for future action
+
         # Remove button with trash icon
         removeButton = QPushButton()
         removeButton.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
@@ -178,6 +189,7 @@ class DashboardView(QWidget):
         accountLayout.addWidget(accountTypeLabel)
         accountLayout.addStretch()
         accountLayout.addWidget(accountBalanceLabel)
+        accountLayout.addWidget(plusButton)
         accountLayout.addWidget(removeButton)
 
         self.accountsLayout.addWidget(accountFrame)
@@ -187,7 +199,7 @@ class DashboardView(QWidget):
         """Remove account from DB and UI."""
         cursor = self.db.cursor()
         cursor.execute(
-            "DELETE FROM finance_accounts WHERE finance_account_id = %s AND user_id = %s",
+            "DELETE FROM finance_accounts WHERE finance_account_id = ? AND user_id = ?",
             (acc_id, self.user_id)
         )
         self.db.commit()
@@ -237,3 +249,10 @@ class DashboardView(QWidget):
         """Set the user_id and reload accounts from DB."""
         self.user_id = user_id
         self.loadAccountsFromDB()
+
+    def showAddAccountDialog(self):
+        dialog = AddAccountDialog(self)
+        if dialog.exec():
+            name, type_id, type_name, balance = dialog.getData()
+            if name:
+                self.addFinanceAccount(name, balance, type_id)
