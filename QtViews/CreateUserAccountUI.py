@@ -191,7 +191,7 @@ class CreateAccountView(QWidget):
             self.connectToMysql()
             self.cursor.execute('use finedu')
             userInsertQuery = ('insert into users (email, pass, salt) values (%s, %s, %s)')
-            userData = (self.email, self.hashedPassword, self.salt,)
+            userData = (self.email, self.hashedPassword, self.saltString,)  # Use string version
             self.cursor.execute(userInsertQuery, userData)
             self.db.commit()
             self.db.close()
@@ -200,9 +200,12 @@ class CreateAccountView(QWidget):
             
     def generateHashedPassword(self):
         self.salt = [random.choice(string.printable) for _ in range(16)]
-        self.salt = ''.join(self.salt).encode('utf-8')
+        self.saltString = ''.join(self.salt)  # Store as string for database
+        saltEncoded = self.saltString.encode('utf-8')  # Encode for hashing
         password = self.passwordField.text().encode('utf-8')
-        self.hashedPassword = hashlib.sha256(password + self.salt).hexdigest()
+        password = password + saltEncoded
+        print(password)
+        self.hashedPassword = hashlib.sha256(password).hexdigest()
         
     def clearView(self):
         self.emailField.setText('')
@@ -212,6 +215,7 @@ class CreateAccountView(QWidget):
         self.successLabel.setText('')
         self.email = ''
         self.salt = ''
+        self.saltString = ''
         self.hashedPassword = ''
     
     def setError(self, errorMessage):
