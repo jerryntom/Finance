@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QDoubleSpinBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+import os
+import sys
 
 class AddAccountDialog(QDialog):
     def __init__(self, parent=None):
@@ -77,3 +79,11 @@ class AddAccountDialog(QDialog):
             self.nameEdit.setToolTip("")
             self.errorLabel.setText("")
         super().accept()
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)

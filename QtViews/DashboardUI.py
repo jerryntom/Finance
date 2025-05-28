@@ -1,4 +1,6 @@
-import mysql.connector
+import sqlite3
+import os
+import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QPushButton, QFrame, QScrollArea, QGridLayout,
@@ -6,16 +8,19 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtGui import QFont, QIcon
 from .AddAccountDialog import AddAccountDialog
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 class DashboardView(QWidget):
     def __init__(self, user_id=None):
         super().__init__()
         self.user_id = user_id
-        self.db = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            database="finedu"
-        )
+        self.db = sqlite3.connect(resource_path("finedu.db"))
         self.accounts = []
         
     def setUpUI(self):
@@ -123,7 +128,7 @@ class DashboardView(QWidget):
         cursor = self.db.cursor()
         cursor.execute(
             "SELECT finance_account_id, finance_account_name, finance_account_type_id, finance_account_balance "
-            "FROM finance_accounts WHERE user_id = %s", (self.user_id,)
+            "FROM finance_accounts WHERE user_id = ?", (self.user_id,)
         )
         for acc_id, name, type_id, balance in cursor.fetchall():
             account_type = self.getAccountTypeName(type_id)
@@ -143,7 +148,7 @@ class DashboardView(QWidget):
         cursor = self.db.cursor()
         cursor.execute(
             "INSERT INTO finance_accounts (finance_account_name, finance_account_type_id, finance_account_balance, user_id) "
-            "VALUES (%s, %s, %s, %s)",
+            "VALUES (?, ?, ?, ?)",
             (name, account_type_id, float(balance), self.user_id)  # Use float for decimal values
         )
         self.db.commit()
@@ -194,7 +199,7 @@ class DashboardView(QWidget):
         """Remove account from DB and UI."""
         cursor = self.db.cursor()
         cursor.execute(
-            "DELETE FROM finance_accounts WHERE finance_account_id = %s AND user_id = %s",
+            "DELETE FROM finance_accounts WHERE finance_account_id = ? AND user_id = ?",
             (acc_id, self.user_id)
         )
         self.db.commit()
@@ -249,6 +254,5 @@ class DashboardView(QWidget):
         dialog = AddAccountDialog(self)
         if dialog.exec():
             name, type_id, type_name, balance = dialog.getData()
-            print(f"Adding account: {name}, Type: {type_name}, Balance: {balance}")
             if name:
                 self.addFinanceAccount(name, balance, type_id)

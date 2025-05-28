@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QLineEdit)
 import re
-import mysql.connector as mysql
+import sqlite3
 import hashlib
 import string
 import random
+import os
+import sys
 
 # Size contants for layout
 initWidth = 800
@@ -31,6 +33,15 @@ passwordMinimumLength = 8
 # DB columns numbers
 hashedPasswordColumn = 0
 saltColumn = 1
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 class LogInView(QWidget):
     def setUpUI(self):
@@ -143,47 +154,36 @@ class LogInView(QWidget):
             self.setError("Invalid e-mail address")
         elif self.email != '':
             self.connectToMysql()
-            self.cursor.execute('use finedu')
-            emailCheckQuery = ('select 1 from users where email = %s')
+            emailCheckQuery = ('select 1 from users where email = ?')
             self.cursor.execute(emailCheckQuery, (self.email,))
             emailCheckResult = self.cursor.fetchone()
-            print(emailCheckResult)
 
             if emailCheckResult is None:
                 self.setError("Invalid e-mail address")
-            else:        
+            else:
                 self.setError("")
                 self.setSuccess("")
-                
             self.db.close()
         
     def isPasswordValid(self):
         password = self.passwordField.text()
-        
         if password == '':
             self.setError("Password cannot be empty")
         else:
             self.connectToMysql()
-            self.cursor.execute('use finedu')
-            accountCredentialsQuery = ('select pass, salt from users where email = %s')
+            accountCredentialsQuery = ('select pass, salt from users where email = ?')
             self.cursor.execute(accountCredentialsQuery, (self.email,))
             accountCredentials = self.cursor.fetchone()
-
             password = password.encode('utf-8')
             salt = accountCredentials[saltColumn].encode('utf-8')
             password = password + salt
-            print(password)
             passwordTest = hashlib.sha256(password).hexdigest()
             hashedPassword = accountCredentials[hashedPasswordColumn]
-            
-            print(passwordTest, hashedPassword)
-            
             if passwordTest != hashedPassword:
                 self.setError("Invalid password")
             else:
                 self.setError("")
                 self.setSuccess("")
-
             self.db.close()
 
         
@@ -195,7 +195,7 @@ class LogInView(QWidget):
         
         # No error messages, proceed to log in procedure
         if self.errorLabel.text() == "":
-            self.getUserId()
+            self.user_id = self.getUserId()
             self.clearView()
             self.setSuccess('Logged in successfully!')
             return self.user_id
@@ -222,29 +222,33 @@ class LogInView(QWidget):
         
     def connectToMysql(self):
         try:
-            self.db = mysql.connect(
-                host="localhost",
-                user="root",
-                password="",
-                database="finedu"
-            )
-            print("Connected to MySQL")
+            self.db = sqlite3.connect(resource_path('finedu.db'))
             self.cursor = self.db.cursor()
-        except mysql.Error as err:
-            print("Failed to connect to MySQL:", err)
+        except Exception as err:
+            print("Failed to connect to SQLite:", err)
             
     def getUserId(self):
         """Return the user_id for the currently logged-in user (by email)."""
-        email = self.emailField.text() if hasattr(self, 'emailField') else getattr(self, 'email', None)
+        email = self.emailField.text()
+        print(email)
         if not email:
             return None
         try:
             self.connectToMysql()
-            self.cursor.execute('SELECT user_id FROM users WHERE email = %s', (email,))
+            self.cursor.execute('SELECT user_id FROM users WHERE email = ?', (email,))
             result = self.cursor.fetchone()
             self.db.close()
             if result:
-                self.user_id = result[0]
+                return result[0]
         except Exception as e:
             print(f"Error fetching user_id: {e}")
+            
         return None
+
+    def resource_path(relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+        return os.path.join(base_path, relative_path)
