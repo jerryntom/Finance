@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QSpacerItem, QSizePolicy, QStyle)
 from PySide6.QtGui import QFont, QIcon
 from .AddAccountDialog import AddAccountDialog
+from .AddTransactionDialog import AddTransactionDialog
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -175,8 +176,8 @@ class DashboardView(QWidget):
         # Plus button with text "+"
         plusButton = QPushButton("+")
         plusButton.setFixedSize(30, 30)
-        plusButton.setToolTip("Plus Action")
-        # plusButton.clicked.connect(lambda: self.handlePlusAction(acc_id))  # Placeholder for future action
+        plusButton.setToolTip("Add Transaction")
+        plusButton.clicked.connect(lambda: self.showAddTransactionDialog(acc_id))
 
         # Remove button with trash icon
         removeButton = QPushButton()
@@ -256,3 +257,22 @@ class DashboardView(QWidget):
             name, type_id, type_name, balance = dialog.getData()
             if name:
                 self.addFinanceAccount(name, balance, type_id)
+
+    def showAddTransactionDialog(self, acc_id):
+        dialog = AddTransactionDialog(self)
+        if dialog.exec():
+            name, amount = dialog.getData()
+            if name and amount is not None:
+                cursor = self.db.cursor()
+                cursor.execute(
+                    "INSERT INTO transactions (transaction_name, transaction_amount, finance_account_id) VALUES (?, ?, ?)",
+                    (name, float(amount), acc_id)
+                )
+                # Update the account balance
+                cursor.execute(
+                    "UPDATE finance_accounts SET finance_account_balance = finance_account_balance + ? WHERE finance_account_id = ?",
+                    (float(amount), acc_id)
+                )
+                self.db.commit()
+                cursor.close()
+                self.loadAccountsFromDB()
