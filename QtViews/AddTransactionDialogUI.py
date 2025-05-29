@@ -1,6 +1,7 @@
 import os
 import sys
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDoubleSpinBox, QDateEdit)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
+                               QLineEdit, QPushButton, QDoubleSpinBox, QDateEdit)
 from PySide6.QtCore import Qt, QDate
 
 def resource_path(relative_path):

@@ -3,9 +3,9 @@ import os
 import sys
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QPushButton, QFrame, QScrollArea, QGridLayout,
-                              QSpacerItem, QSizePolicy, QStyle)
-from PySide6.QtGui import QFont, QIcon
+                              QPushButton, QFrame, QScrollArea, QGridLayout, 
+                              QStyle)
+from PySide6.QtGui import QFont
 from .AddAccountDialogUI import AddAccountDialog
 from .AddTransactionDialogUI import AddTransactionDialog
 

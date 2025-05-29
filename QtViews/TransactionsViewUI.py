@@ -1,7 +1,9 @@
 import sqlite3
 import os
 import sys
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout, QMessageBox, QScrollArea, QFrame, QSpacerItem, QSizePolicy
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel,
+                                QHBoxLayout, QMessageBox, QScrollArea, 
+                                QFrame, QSpacerItem, QSizePolicy)
 from PySide6.QtGui import QFont, Qt
 
 class TransactionView(QWidget):
