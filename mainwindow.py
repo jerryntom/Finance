@@ -1,19 +1,14 @@
-from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
-    QMetaObject, QObject, QPoint, QRect,
-    QSize, QTime, QUrl, Qt)
-from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
-    QFont, QFontDatabase, QGradient, QIcon,
-    QImage, QKeySequence, QLinearGradient, QPainter,
-    QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
-    QMenuBar, QPushButton, QSizePolicy, QStatusBar,
-    QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QStackedWidget)
+from PySide6.QtCore import QMetaObject
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (QApplication, QMainWindow,
+                               QWidget, QVBoxLayout, QStackedWidget)
 import os
 import sys
 from QtViews.MainUI import MainView
 from QtViews.LogInUI import LogInView
 from QtViews.CreateUserAccountUI import CreateAccountView
 from QtViews.DashboardUI import DashboardView
+from QtViews.TransactionsViewUI import TransactionView
 
 # Size contants for layout
 initWidth = 800
@@ -74,12 +69,17 @@ class MainWindow():
         self.dashboardView = DashboardView()
         self.dashboardView.setUpUI()
         self.dashboardView.logoutButton.clicked.connect(self.handleLogout)
-        
+
+        # Set up transaction view
+        self.transactionView = TransactionView()
+        self.transactionView.goBackButton.clicked.connect(lambda: self.showDashboardView())
+
         # Add views to navigation
         self.navigation.addWidget(self.mainView)
         self.navigation.addWidget(self.logInView)
         self.navigation.addWidget(self.createAccountView)
         self.navigation.addWidget(self.dashboardView)
+        self.navigation.addWidget(self.transactionView)
         self.navigation.setCurrentWidget(self.mainView)
         
         mainWindow.setWindowTitle("FinEdu")
@@ -108,7 +108,12 @@ class MainWindow():
         self.navigation.setCurrentWidget(self.logInView)
     
     def showDashboardView(self):
+        self.dashboardView.loadAccountsFromDB()
         self.navigation.setCurrentWidget(self.dashboardView)
+
+    def showTransactionView(self, account_id, transactions):
+        self.transactionView.setAccount(account_id, transactions)
+        self.navigation.setCurrentWidget(self.transactionView)
 
 
 class MainWindowSetUp(QMainWindow):

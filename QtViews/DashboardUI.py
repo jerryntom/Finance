@@ -1,13 +1,13 @@
 import sqlite3
 import os
 import sys
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QPushButton, QFrame, QScrollArea, QGridLayout,
-                              QSpacerItem, QSizePolicy, QStyle)
-from PySide6.QtGui import QFont, QIcon
-from .AddAccountDialog import AddAccountDialog
-from .AddTransactionDialog import AddTransactionDialog
+                              QPushButton, QFrame, QScrollArea, QGridLayout, 
+                              QStyle)
+from PySide6.QtGui import QFont
+from .AddAccountDialogUI import AddAccountDialog
+from .AddTransactionDialogUI import AddTransactionDialog
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -83,11 +83,14 @@ class DashboardView(QWidget):
         emptyStateLayout.addWidget(self.emptyStateSubLabel)
         emptyStateLayout.setContentsMargins(20, 30, 20, 30)
         
-        # Accounts scroll area
+        # Accounts scroll area (card list)
         self.accountsScrollArea = QScrollArea()
         self.accountsScrollArea.setWidgetResizable(True)
+        self.accountsScrollArea.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         self.accountsContainer = QWidget()
         self.accountsLayout = QVBoxLayout(self.accountsContainer)
+        self.accountsLayout.setSpacing(10)
+        self.accountsLayout.addStretch()  # Add stretch at the end so single card doesn't fill all space
         self.accountsScrollArea.setWidget(self.accountsContainer)
         
         # Add account button
@@ -168,46 +171,61 @@ class DashboardView(QWidget):
         return mapping.get(account_type, 1)
 
     def _addAccountWidget(self, acc_id, name, balance, account_type):
+        # Card-like frame for account
         accountFrame = QFrame()
         accountFrame.setFrameShape(QFrame.StyledPanel)
+        accountFrame.setStyleSheet("QFrame { background: #23272e; border-radius: 10px; border: 2px solid #444; margin-bottom: 8px; }")
         accountLayout = QHBoxLayout(accountFrame)
+        accountLayout.setContentsMargins(16, 10, 16, 10)
+        accountLayout.setSpacing(12)
 
+        # Account name with border
         accountNameLabel = QLabel(name)
+        accountNameLabel.setStyleSheet("QLabel { border: 2px solid #1976d2; border-radius: 6px; padding: 4px 12px; background: #23272e; color: #fff; font-weight: bold; }")
+        # Account type with border
         accountTypeLabel = QLabel(account_type)
+        accountTypeLabel.setStyleSheet("QLabel { border: 2px solid #888; border-radius: 6px; padding: 4px 12px; background: #23272e; color: #fff; }")
+        # Account balance
         accountBalanceLabel = QLabel(f"${balance:.2f}")
-
         font = QFont()
         font.setBold(True)
         accountBalanceLabel.setFont(font)
+        # Green for positive, red for negative
+        accountBalanceLabel.setStyleSheet(f"color: {'#4caf50' if balance >= 0 else '#e57373'}; font-size: 15px; font-weight: bold;")
 
-        # Add transaction button
+        # Add Transaction button
         addTransactionButton = QPushButton("Add Transaction")
-        addTransactionButton.setFixedSize(120, 30)
+        addTransactionButton.setFixedSize(140, 30)
         addTransactionButton.setToolTip("Add Transaction")
+        addTransactionButton.setStyleSheet("QPushButton { background: #1976d2; color: #fff; border-radius: 6px; } QPushButton:hover { background: #1565c0; }")
         addTransactionButton.clicked.connect(lambda: self.showAddTransactionDialog(acc_id))
 
-        # View Transactions button
-        viewTransactionsButton = QPushButton("View Transactions")
-        viewTransactionsButton.setFixedSize(120, 30)
-        viewTransactionsButton.setToolTip("View Transactions for this Account")
-        viewTransactionsButton.clicked.connect(lambda: self.parent().showTransactionView(acc_id, name) if self.parent() and hasattr(self.parent(), 'showTransactionView') else None)
-
-        # Remove button with trash icon
+        # Remove button
         removeButton = QPushButton()
         removeButton.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
         removeButton.setFixedSize(30, 30)
         removeButton.setToolTip("Remove Account")
+        removeButton.setStyleSheet("QPushButton { background: #23272e; color: #fff; border: 1px solid #e57373; border-radius: 15px; } QPushButton:hover { background: #c62828; color: #fff; }")
         removeButton.clicked.connect(lambda: self.removeAccount(acc_id, accountFrame))
+
+        # View Transactions button
+        showTransactionsButton = QPushButton("View Transactions")
+        showTransactionsButton.setFixedSize(140, 30)
+        showTransactionsButton.setToolTip("View Transactions for this Account")
+        showTransactionsButton.setStyleSheet("QPushButton { background: #31363f; color: #fff; border-radius: 6px; } QPushButton:hover { background: #23272e; }")
+        showTransactionsButton.clicked.connect(lambda: self.showTransactionsForAccount(acc_id))
 
         accountLayout.addWidget(accountNameLabel)
         accountLayout.addWidget(accountTypeLabel)
         accountLayout.addStretch()
         accountLayout.addWidget(accountBalanceLabel)
         accountLayout.addWidget(addTransactionButton)
-        accountLayout.addWidget(viewTransactionsButton)
+        accountLayout.addWidget(showTransactionsButton)
         accountLayout.addWidget(removeButton)
 
-        self.accountsLayout.addWidget(accountFrame)
+        # Insert before the stretch at the end so accounts go top-to-bottom
+        stretch_index = self.accountsLayout.count() - 1
+        self.accountsLayout.insertWidget(stretch_index, accountFrame)
         self.accounts.append(accountFrame)
 
     def removeAccount(self, acc_id, accountFrame):
@@ -298,7 +316,16 @@ class DashboardView(QWidget):
             self.accountsLayout.removeWidget(account)
             account.deleteLater()
         self.accounts = []
-        
+        # Remove all items from layout (including stretch)
+        while self.accountsLayout.count():
+            item = self.accountsLayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            else:
+                del item
+        # Add stretch again at the end
+        self.accountsLayout.addStretch()
         # Update empty state visibility
         self.updateEmptyState()
 
@@ -333,6 +360,23 @@ class DashboardView(QWidget):
                 cursor.close()
                 self.loadAccountsFromDB()
                 self.updateIncomeAndExpenses()
+
+    def showTransactionsForAccount(self, acc_id):
+        # Fetch transactions for this account from DB
+        cursor = self.db.cursor()
+        cursor.execute(
+            "SELECT transaction_date, transaction_name, transaction_amount FROM transactions WHERE finance_account_id = ? ORDER BY transaction_date DESC",
+            (acc_id,)
+        )
+        transactions = [
+            {"date": row[0], "description": row[1], "amount": row[2]} for row in cursor.fetchall()
+        ]
+        cursor.close()
+        # Show transaction view via main window
+        if hasattr(self.parent(), 'showTransactionView'):
+            self.parent().showTransactionView(acc_id, transactions)
+        elif hasattr(self.window(), 'mainWindow') and hasattr(self.window().mainWindow, 'showTransactionView'):
+            self.window().mainWindow.showTransactionView(acc_id, transactions)
 
     def updateTotalBalance(self, value):
         """Update the total balance summary box value label."""
