@@ -8,11 +8,13 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QSpacerItem, QStackedWidget)
+import os
 import sys
 from QtViews.MainUI import MainView
 from QtViews.LogInUI import LogInView
 from QtViews.CreateUserAccountUI import CreateAccountView
 from QtViews.DashboardUI import DashboardView
+from QtViews.TransactionsViewUI import TransactionView
 
 # Size contants for layout
 initWidth = 800
@@ -24,6 +26,15 @@ verticalSpacerHeight = 10
 formWidgetsFrameMinimumWidth = 250
 formWidgetsFrameMaximumWidth = 400
 logInButtonMinimumHeight = 50
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 class MainWindow():
     def setupUi(self, mainWindow):
@@ -65,14 +76,20 @@ class MainWindow():
         self.dashboardView.setUpUI()
         self.dashboardView.logoutButton.clicked.connect(self.handleLogout)
 
+        # Set up transaction view
+        self.transactionView = TransactionView()
+        self.transactionView.goBackButton.clicked.connect(lambda: self.showDashboardView())
+
         # Add views to navigation
         self.navigation.addWidget(self.mainView)
         self.navigation.addWidget(self.logInView)
         self.navigation.addWidget(self.createAccountView)
         self.navigation.addWidget(self.dashboardView)
+        self.navigation.addWidget(self.transactionView)
         self.navigation.setCurrentWidget(self.mainView)
         
         mainWindow.setWindowTitle("FinEdu")
+        mainWindow.setWindowIcon(QIcon(resource_path("icon.png")))
         QMetaObject.connectSlotsByName(mainWindow)
     
     def handleLogin(self):
@@ -97,7 +114,13 @@ class MainWindow():
         self.navigation.setCurrentWidget(self.logInView)
     
     def showDashboardView(self):
+        self.dashboardView.loadAccountsFromDB()
         self.navigation.setCurrentWidget(self.dashboardView)
+
+    def showTransactionView(self, account_id, transactions):
+        self.transactionView.setAccount(account_id, transactions)
+        self.navigation.setCurrentWidget(self.transactionView)
+
 
 class MainWindowSetUp(QMainWindow):
     def __init__(self, parent=None):

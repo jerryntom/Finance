@@ -1,12 +1,13 @@
 import sqlite3
 import os
 import sys
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QPushButton, QFrame, QScrollArea, QGridLayout,
                               QSpacerItem, QSizePolicy, QStyle)
 from PySide6.QtGui import QFont, QIcon
-from .AddAccountDialog import AddAccountDialog
+from .AddAccountDialogUI import AddAccountDialog
+from .AddTransactionDialogUI import AddTransactionDialog
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -82,11 +83,14 @@ class DashboardView(QWidget):
         emptyStateLayout.addWidget(self.emptyStateSubLabel)
         emptyStateLayout.setContentsMargins(20, 30, 20, 30)
         
-        # Accounts scroll area
+        # Accounts scroll area (card list)
         self.accountsScrollArea = QScrollArea()
         self.accountsScrollArea.setWidgetResizable(True)
+        self.accountsScrollArea.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         self.accountsContainer = QWidget()
         self.accountsLayout = QVBoxLayout(self.accountsContainer)
+        self.accountsLayout.setSpacing(10)
+        self.accountsLayout.addStretch()  # Add stretch at the end so single card doesn't fill all space
         self.accountsScrollArea.setWidget(self.accountsContainer)
         
         # Add account button
@@ -120,10 +124,13 @@ class DashboardView(QWidget):
         self.loadAccountsFromDB()
 
     def loadAccountsFromDB(self):
-        """Load accounts from MySQL for the current user."""
+        """Load accounts from SQLite for the current user and update total balance."""
         self.clearAccounts()
+        total_balance = 0.0
         if not self.user_id:
             self.updateEmptyState()
+            self.updateTotalBalance(0.0)
+            self.updateIncomeAndExpenses()
             return
         cursor = self.db.cursor()
         cursor.execute(
@@ -133,8 +140,11 @@ class DashboardView(QWidget):
         for acc_id, name, type_id, balance in cursor.fetchall():
             account_type = self.getAccountTypeName(type_id)
             self._addAccountWidget(acc_id, name, balance, account_type)
+            total_balance += float(balance)
         cursor.close()
         self.updateEmptyState()
+        self.updateTotalBalance(total_balance)
+        self.updateIncomeAndExpenses()
 
     def getAccountTypeName(self, type_id):
         # You can expand this mapping as needed
@@ -154,50 +164,78 @@ class DashboardView(QWidget):
         self.db.commit()
         cursor.close()
         self.loadAccountsFromDB()
+        self.updateIncomeAndExpenses()
 
     def getAccountTypeId(self, account_type):
         mapping = {1: "Bank", 2: "Savings", 3: "Investment", 4: "Credit", 5: "Cash"}
         return mapping.get(account_type, 1)
 
     def _addAccountWidget(self, acc_id, name, balance, account_type):
+        # Card-like frame for account
         accountFrame = QFrame()
         accountFrame.setFrameShape(QFrame.StyledPanel)
+        accountFrame.setStyleSheet("QFrame { background: #23272e; border-radius: 10px; border: 2px solid #444; margin-bottom: 8px; }")
         accountLayout = QHBoxLayout(accountFrame)
+        accountLayout.setContentsMargins(16, 10, 16, 10)
+        accountLayout.setSpacing(12)
 
+        # Account name with border
         accountNameLabel = QLabel(name)
+        accountNameLabel.setStyleSheet("QLabel { border: 2px solid #1976d2; border-radius: 6px; padding: 4px 12px; background: #23272e; color: #fff; font-weight: bold; }")
+        # Account type with border
         accountTypeLabel = QLabel(account_type)
+        accountTypeLabel.setStyleSheet("QLabel { border: 2px solid #888; border-radius: 6px; padding: 4px 12px; background: #23272e; color: #fff; }")
+        # Account balance
         accountBalanceLabel = QLabel(f"${balance:.2f}")
-
         font = QFont()
         font.setBold(True)
         accountBalanceLabel.setFont(font)
+        # Green for positive, red for negative
+        accountBalanceLabel.setStyleSheet(f"color: {'#4caf50' if balance >= 0 else '#e57373'}; font-size: 15px; font-weight: bold;")
 
-        # Plus button with text "+"
-        plusButton = QPushButton("+")
-        plusButton.setFixedSize(30, 30)
-        plusButton.setToolTip("Plus Action")
-        # plusButton.clicked.connect(lambda: self.handlePlusAction(acc_id))  # Placeholder for future action
+        # Add Transaction button
+        addTransactionButton = QPushButton("Add Transaction")
+        addTransactionButton.setFixedSize(140, 30)
+        addTransactionButton.setToolTip("Add Transaction")
+        addTransactionButton.setStyleSheet("QPushButton { background: #1976d2; color: #fff; border-radius: 6px; } QPushButton:hover { background: #1565c0; }")
+        addTransactionButton.clicked.connect(lambda: self.showAddTransactionDialog(acc_id))
 
-        # Remove button with trash icon
+        # Remove button
         removeButton = QPushButton()
         removeButton.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
         removeButton.setFixedSize(30, 30)
         removeButton.setToolTip("Remove Account")
+        removeButton.setStyleSheet("QPushButton { background: #23272e; color: #fff; border: 1px solid #e57373; border-radius: 15px; } QPushButton:hover { background: #c62828; color: #fff; }")
         removeButton.clicked.connect(lambda: self.removeAccount(acc_id, accountFrame))
+
+        # View Transactions button
+        showTransactionsButton = QPushButton("View Transactions")
+        showTransactionsButton.setFixedSize(140, 30)
+        showTransactionsButton.setToolTip("View Transactions for this Account")
+        showTransactionsButton.setStyleSheet("QPushButton { background: #31363f; color: #fff; border-radius: 6px; } QPushButton:hover { background: #23272e; }")
+        showTransactionsButton.clicked.connect(lambda: self.showTransactionsForAccount(acc_id))
 
         accountLayout.addWidget(accountNameLabel)
         accountLayout.addWidget(accountTypeLabel)
         accountLayout.addStretch()
         accountLayout.addWidget(accountBalanceLabel)
-        accountLayout.addWidget(plusButton)
+        accountLayout.addWidget(addTransactionButton)
+        accountLayout.addWidget(showTransactionsButton)
         accountLayout.addWidget(removeButton)
 
-        self.accountsLayout.addWidget(accountFrame)
+        # Insert before the stretch at the end so accounts go top-to-bottom
+        stretch_index = self.accountsLayout.count() - 1
+        self.accountsLayout.insertWidget(stretch_index, accountFrame)
         self.accounts.append(accountFrame)
 
     def removeAccount(self, acc_id, accountFrame):
         """Remove account from DB and UI."""
         cursor = self.db.cursor()
+        # Remove transactions for this account
+        cursor.execute(
+            "DELETE FROM transactions WHERE finance_account_id = ?",
+            (acc_id,)
+        )
         cursor.execute(
             "DELETE FROM finance_accounts WHERE finance_account_id = ? AND user_id = ?",
             (acc_id, self.user_id)
@@ -209,13 +247,50 @@ class DashboardView(QWidget):
             self.accounts.remove(accountFrame)
         accountFrame.deleteLater()
         self.updateEmptyState()
+        self.loadAccountsFromDB()
+        self.updateIncomeAndExpenses()
 
+    def updateIncomeAndExpenses(self):
+        """Update the monthly income and expenses summary fields for the current month."""
+        if not self.user_id:
+            self.updateIncome(0.0)
+            self.updateExpenses(0.0)
+            return
+        import datetime
+        now = datetime.datetime.now()
+        month_start = now.replace(day=1).strftime('%Y-%m-%d')
+        month_end = (now.replace(day=28) + datetime.timedelta(days=4)).replace(day=1) - datetime.timedelta(days=1)
+        month_end = month_end.strftime('%Y-%m-%d')
+        cursor = self.db.cursor()
+        cursor.execute(
+            "SELECT transaction_amount FROM transactions t JOIN finance_accounts a ON t.finance_account_id = a.finance_account_id WHERE a.user_id = ? AND transaction_date >= ? AND transaction_date <= ?",
+            (self.user_id, month_start, month_end)
+        )
+        income = 0.0
+        expenses = 0.0
+        for (amount,) in cursor.fetchall():
+            if amount >= 0:
+                income += amount
+            else:
+                expenses += amount
+        cursor.close()
+        self.updateIncome(income)
+        self.updateExpenses(abs(expenses))
+
+    def updateIncome(self, value):
+        valueLabel = self.incomeFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")
+
+    def updateExpenses(self, value):
+        valueLabel = self.expensesFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")
+        
     def updateEmptyState(self):
         """Show or hide empty state message depending on accounts"""
         hasAccounts = len(self.accounts) > 0
         self.emptyStateFrame.setVisible(not hasAccounts)
         self.accountsScrollArea.setVisible(hasAccounts)
-        
+
     def createSummaryBox(self, title, value):
         frame = QFrame()
         layout = QVBoxLayout(frame)
@@ -241,7 +316,16 @@ class DashboardView(QWidget):
             self.accountsLayout.removeWidget(account)
             account.deleteLater()
         self.accounts = []
-        
+        # Remove all items from layout (including stretch)
+        while self.accountsLayout.count():
+            item = self.accountsLayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+            else:
+                del item
+        # Add stretch again at the end
+        self.accountsLayout.addStretch()
         # Update empty state visibility
         self.updateEmptyState()
 
@@ -256,3 +340,46 @@ class DashboardView(QWidget):
             name, type_id, type_name, balance = dialog.getData()
             if name:
                 self.addFinanceAccount(name, balance, type_id)
+
+    def showAddTransactionDialog(self, acc_id):
+        dialog = AddTransactionDialog(self)
+        if dialog.exec():
+            name, amount, date = dialog.getData()
+            if name and amount is not None:
+                cursor = self.db.cursor()
+                cursor.execute(
+                    "INSERT INTO transactions (transaction_name, transaction_amount, finance_account_id, transaction_date) VALUES (?, ?, ?, ?)",
+                    (name, float(amount), acc_id, date)
+                )
+                # Update the account balance
+                cursor.execute(
+                    "UPDATE finance_accounts SET finance_account_balance = finance_account_balance + ? WHERE finance_account_id = ?",
+                    (float(amount), acc_id)
+                )
+                self.db.commit()
+                cursor.close()
+                self.loadAccountsFromDB()
+                self.updateIncomeAndExpenses()
+
+    def showTransactionsForAccount(self, acc_id):
+        # Fetch transactions for this account from DB
+        cursor = self.db.cursor()
+        cursor.execute(
+            "SELECT transaction_date, transaction_name, transaction_amount FROM transactions WHERE finance_account_id = ? ORDER BY transaction_date DESC",
+            (acc_id,)
+        )
+        transactions = [
+            {"date": row[0], "description": row[1], "amount": row[2]} for row in cursor.fetchall()
+        ]
+        cursor.close()
+        # Show transaction view via main window
+        if hasattr(self.parent(), 'showTransactionView'):
+            self.parent().showTransactionView(acc_id, transactions)
+        elif hasattr(self.window(), 'mainWindow') and hasattr(self.window().mainWindow, 'showTransactionView'):
+            self.window().mainWindow.showTransactionView(acc_id, transactions)
+
+    def updateTotalBalance(self, value):
+        """Update the total balance summary box value label."""
+        # Assumes the second widget in totalBalanceFrame is the value label
+        valueLabel = self.totalBalanceFrame.findChildren(QLabel)[1]
+        valueLabel.setText(f"${value:.2f}")

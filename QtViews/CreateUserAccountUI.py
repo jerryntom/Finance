@@ -41,6 +41,11 @@ def resource_path(relative_path):
 
 class CreateAccountView(QWidget):
     def setUpUI(self):
+        # Remove existing layout if present to avoid QLayout warning
+        old_layout = self.layout()
+        if old_layout is not None:
+            QWidget().setLayout(old_layout)
+        
         self.setObjectName("logInView")
         
         # Vertical box layout for the main view window
