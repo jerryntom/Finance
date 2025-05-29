@@ -23,6 +23,11 @@ buttonMinimumHeight = 50
 
 class MainView(QWidget):
     def setUpUI(self):
+        # Remove existing layout if present to avoid QLayout warning
+        old_layout = self.layout() 
+        if old_layout is not None:
+            QWidget().setLayout(old_layout)
+        
         self.setObjectName("main_view")
         
         # Vertical box layout for the main view window

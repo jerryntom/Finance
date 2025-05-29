@@ -76,6 +76,10 @@ class AddTransactionDialog(QDialog):
             self.nameEdit.setToolTip("Transaction name cannot be empty.")
             self.errorLabel.setText("Transaction name cannot be empty.")
             return
+        elif amount == 0:
+            self.amountSpin.setToolTip("Transaction amount cannot be zero.")
+            self.errorLabel.setText("Transaction amount cannot be zero.")
+            return
         else:
             self.nameEdit.setToolTip("")
             self.amountSpin.setToolTip("")

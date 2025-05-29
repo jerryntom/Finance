@@ -14,6 +14,7 @@ from QtViews.MainUI import MainView
 from QtViews.LogInUI import LogInView
 from QtViews.CreateUserAccountUI import CreateAccountView
 from QtViews.DashboardUI import DashboardView
+from QtViews.TransactionsViewUI import TransactionView
 
 # Size contants for layout
 initWidth = 800
@@ -74,12 +75,17 @@ class MainWindow():
         self.dashboardView = DashboardView()
         self.dashboardView.setUpUI()
         self.dashboardView.logoutButton.clicked.connect(self.handleLogout)
-        
+
+        # Set up transaction view
+        self.transactionView = TransactionView()
+        self.transactionView.goBackButton.clicked.connect(lambda: self.showDashboardView())
+
         # Add views to navigation
         self.navigation.addWidget(self.mainView)
         self.navigation.addWidget(self.logInView)
         self.navigation.addWidget(self.createAccountView)
         self.navigation.addWidget(self.dashboardView)
+        self.navigation.addWidget(self.transactionView)
         self.navigation.setCurrentWidget(self.mainView)
         
         mainWindow.setWindowTitle("FinEdu")
@@ -108,7 +114,12 @@ class MainWindow():
         self.navigation.setCurrentWidget(self.logInView)
     
     def showDashboardView(self):
+        self.dashboardView.loadAccountsFromDB()
         self.navigation.setCurrentWidget(self.dashboardView)
+
+    def showTransactionView(self, account_id, transactions):
+        self.transactionView.setAccount(account_id, transactions)
+        self.navigation.setCurrentWidget(self.transactionView)
 
 
 class MainWindowSetUp(QMainWindow):
